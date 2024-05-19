@@ -9,6 +9,7 @@ class MusicPlayer:
         self.root = root
         self.root.title("Gesture Music Player")
         self.root.geometry("300x200")
+        self.root.attributes("-topmost", True)
 
         pygame.mixer.init()
 
