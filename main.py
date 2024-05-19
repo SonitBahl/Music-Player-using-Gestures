@@ -128,7 +128,9 @@ class MusicPlayer:
             if not success:
                 continue
 
-            image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            image = cv2.flip(image, 1)  
+
             results = self.hands.process(image)
 
             if results.multi_hand_landmarks:
@@ -151,7 +153,7 @@ class MusicPlayer:
                             self.next_music()
                             self.set_cooldown()
 
-            cv2.imshow("Hand Gesture Recognition", image)
+            cv2.imshow("Hand Gesture Recognition", cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
             if cv2.waitKey(5) & 0xFF == 27:
                 break
 
