@@ -1,13 +1,17 @@
 import os
 import random
 import pygame
+import cv2
+import mediapipe as mp
 from tkinter import *
 from tkinter import filedialog, messagebox
+import threading
+import time
 
 class MusicPlayer:
     def __init__(self, root):
         self.root = root
-        self.root.title("Gesture Music Player")
+        self.root.title("Music Player")
         self.root.geometry("300x200")
         self.root.attributes("-topmost", True)
 
@@ -20,6 +24,7 @@ class MusicPlayer:
         self.load_music()
 
         self.playing = False
+        self.cooldown = False
 
         self.play_button = Button(self.root, text="Play", command=self.play_music)
         self.play_button.pack(pady=10)
@@ -32,6 +37,11 @@ class MusicPlayer:
 
         self.prev_button = Button(self.root, text="Previous", command=self.prev_music)
         self.prev_button.pack(pady=10)
+
+        self.action_label = Label(self.root, text="")
+        self.action_label.pack(pady=10)
+
+        self.setup_gesture_recognition()
 
     def load_music(self):
         if not self.music_folder:
@@ -57,10 +67,12 @@ class MusicPlayer:
             pygame.mixer.music.play()
             self.playing = True
             self.play_button.config(text="Stop")
+            self.update_action_label("Play")
         else:
             pygame.mixer.music.stop()
             self.playing = False
             self.play_button.config(text="Play")
+            self.update_action_label("Stop")
 
     def pause_music(self):
         if not self.playlist:
@@ -70,10 +82,12 @@ class MusicPlayer:
             pygame.mixer.music.pause()
             self.playing = False
             self.pause_button.config(text="Unpause")
+            self.update_action_label("Pause")
         else:
             pygame.mixer.music.unpause()
             self.playing = True
             self.pause_button.config(text="Pause")
+            self.update_action_label("Unpause")
 
     def next_music(self):
         if not self.playlist:
@@ -84,6 +98,7 @@ class MusicPlayer:
         pygame.mixer.music.play()
         self.playing = True
         self.play_button.config(text="Stop")
+        self.update_action_label("Next")
 
     def prev_music(self):
         if not self.playlist:
@@ -94,6 +109,64 @@ class MusicPlayer:
         pygame.mixer.music.play()
         self.playing = True
         self.play_button.config(text="Stop")
+        self.update_action_label("Previous")
+
+    def setup_gesture_recognition(self):
+        self.mp_hands = mp.solutions.hands
+        self.hands = self.mp_hands.Hands()
+        self.mp_drawing = mp.solutions.drawing_utils
+
+        self.cap = cv2.VideoCapture(0)
+
+        self.gesture_thread = threading.Thread(target=self.gesture_recognition)
+        self.gesture_thread.daemon = True
+        self.gesture_thread.start()
+
+    def gesture_recognition(self):
+        while True:
+            success, image = self.cap.read()
+            if not success:
+                continue
+
+            image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
+            results = self.hands.process(image)
+
+            if results.multi_hand_landmarks:
+                for hand_landmarks in results.multi_hand_landmarks:
+                    self.mp_drawing.draw_landmarks(image, hand_landmarks, self.mp_hands.HAND_CONNECTIONS)
+
+                    thumb_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.THUMB_TIP]
+                    index_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.INDEX_FINGER_TIP]
+                    middle_tip = hand_landmarks.landmark[self.mp_hands.HandLandmark.MIDDLE_FINGER_TIP]
+                    wrist = hand_landmarks.landmark[self.mp_hands.HandLandmark.WRIST]
+
+                    if not self.cooldown:
+                        if thumb_tip.y < index_tip.y and thumb_tip.y < middle_tip.y:
+                            self.play_music()
+                            self.set_cooldown()
+                        elif index_tip.x < wrist.x:
+                            self.prev_music()
+                            self.set_cooldown()
+                        elif index_tip.x > wrist.x:
+                            self.next_music()
+                            self.set_cooldown()
+
+            cv2.imshow("Hand Gesture Recognition", image)
+            if cv2.waitKey(5) & 0xFF == 27:
+                break
+
+        self.cap.release()
+        cv2.destroyAllWindows()
+
+    def set_cooldown(self):
+        self.cooldown = True
+        threading.Timer(2, self.reset_cooldown).start()
+
+    def reset_cooldown(self):
+        self.cooldown = False
+
+    def update_action_label(self, action):
+        self.action_label.config(text=f"Action: {action}")
 
 if __name__ == "__main__":
     root = Tk()
